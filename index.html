@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Double rAF demo</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #181b22;
+      --stroke: #2a2f3a;
+      --text: #e6e8ec;
+      --muted: #8b93a1;
+      --accent: #599ce7;
+      --good: #38b27f;
+      --bad: #e0556f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 32px 24px 64px;
+    }
+
+    h1 {
+      font-size: 22px;
+      margin: 0 0 4px;
+    }
+
+    p.sub {
+      color: var(--muted);
+      margin: 0 0 28px;
+      font-size: 14px;
+    }
+
+    .envbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .env-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      background: var(--panel);
+      border: 1px solid var(--stroke);
+      border-radius: 8px;
+      padding: 8px 14px;
+      min-width: 120px;
+    }
+
+    .env-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--muted);
+    }
+
+    .env-val {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .env-val .engine-tag {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 28px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    button {
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      background: var(--panel);
+      border: 1px solid var(--stroke);
+      border-radius: 8px;
+      padding: 10px 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+    }
+
+    button.primary {
+      background: var(--accent);
+      color: #0f1115;
+      border-color: var(--accent);
+    }
+
+    .lanes {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 760px) {
+      .lanes {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .lane {
+      background: var(--panel);
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .lane h2 {
+      font-size: 14px;
+      margin: 0 0 2px;
+    }
+
+    .lane .desc {
+      font-size: 12px;
+      color: var(--muted);
+      margin: 0 0 14px;
+      min-height: 32px;
+    }
+
+    /* khu vực sân khấu cho box bay vào */
+    .stage {
+      height: 120px;
+      border: 1px dashed var(--stroke);
+      border-radius: 8px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .box {
+      width: 64px;
+      height: 64px;
+      border-radius: 12px;
+      background: var(--accent);
+      transition: opacity .6s ease, transform .6s ease;
+    }
+
+    /* trạng thái ban đầu (from) */
+    .box.from {
+      opacity: 0;
+      transform: translateY(28px) scale(.85);
+    }
+
+    /* trạng thái cuối (to) */
+    .box.to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    .readout {
+      margin-top: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .readout b {
+      color: var(--text);
+    }
+
+    .verdict {
+      font-weight: 700;
+    }
+
+    .verdict.ok {
+      color: var(--good);
+    }
+
+    .verdict.fail {
+      color: var(--bad);
+    }
+
+    .hint {
+      margin-top: 32px;
+      font-size: 13px;
+      color: var(--muted);
+      max-width: 720px;
+      line-height: 1.55;
+    }
+
+    code {
+      background: #11141a;
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Double rAF — trình duyệt của bạn có "đủ thông minh" không?</h1>
+  <p class="sub">Cùng một CSS transition, ba cách trigger khác nhau. Bấm "Chạy cả 3" để so sánh song song.</p>
+
+  <div class="envbar" id="envbar">
+    <div class="env-item"><span class="env-label">Trình duyệt</span><span class="env-val" id="env-browser">—</span>
+    </div>
+    <div class="env-item"><span class="env-label">Engine</span><span class="env-val" id="env-engine">—</span></div>
+    <div class="env-item"><span class="env-label">Màn hình</span><span class="env-val" id="env-refresh">—</span></div>
+  </div>
+
+  <div class="controls">
+    <div>
+      <button data-mode="none">Không rAF</button>
+      <button data-mode="single">1× rAF</button>
+      <button data-mode="double">2× rAF</button>
+    </div>
+    <button class="primary" id="runAll">▶ Chạy cả 3 cùng lúc</button>
+  </div>
+
+  <div class="lanes">
+    <div class="lane">
+      <h2>❌ Không rAF</h2>
+      <p class="desc">Đổi class ngay lập tức (đồng bộ) trong cùng một task.</p>
+      <div class="stage" id="stage-none"></div>
+      <div class="readout" id="out-none">—</div>
+    </div>
+
+    <div class="lane">
+      <h2>🤔 1× rAF</h2>
+      <p class="desc">Tạo box ở <b>task</b>, đợi đúng một <code>requestAnimationFrame</code> rồi đổi state.
+        (<code>.from</code> đã kịp paint ở frame trước.)</p>
+      <div class="stage" id="stage-single"></div>
+      <div class="readout" id="out-single">—</div>
+    </div>
+
+    <div class="lane">
+      <h2>✅ 2× rAF</h2>
+      <p class="desc">Lồng hai <code>requestAnimationFrame</code> — đợi qua hẳn một frame đã paint.</p>
+      <div class="stage" id="stage-double"></div>
+      <div class="readout" id="out-double">—</div>
+    </div>
+  </div>
+
+  <p class="hint">
+    Mỗi lần chạy, ta tạo một box mới ở state <code>.from</code> (mờ + dịch xuống), rồi tùy chế độ mà
+    chuyển sang <code>.to</code>. Nếu trình duyệt <b>gộp</b> hai state vào một paint, box sẽ hiện ra
+    "bụp" không có transition (= <span class="verdict fail">FAIL</span>). Nếu transition chạy mượt thì
+    <span class="verdict ok">OK</span>. Con số <b>frames waited</b> cho biết thực tế đã trôi qua bao nhiêu
+    frame trước khi đổi sang state cuối — đây là bằng chứng cho thấy 1× và 2× rAF khác nhau ra sao.
+  </p>
+
+  <script>
+    // Đếm tổng số frame đã trôi qua kể từ khi trang load — dùng làm "đồng hồ frame".
+    let frameClock = 0;
+    (function tickClock() {
+      frameClock++;
+      requestAnimationFrame(tickClock);
+    })();
+
+    // Tạo box MỚI ở state `from` và gắn vào sân khấu của lane.
+    // Tách riêng để mỗi chế độ chủ động chọn THỜI ĐIỂM tạo box
+    // (ở task, hay bên trong một rAF) — đây chính là yếu tố quyết định.
+    function setupLane(mode) {
+      const stage = document.getElementById('stage-' + mode);
+      const out = document.getElementById('out-' + mode);
+      stage.innerHTML = '';
+      const box = document.createElement('div');
+      box.className = 'box from';
+      stage.appendChild(box);
+
+      const startFrame = frameClock;
+      let transitioned = false;
+      box.addEventListener('transitionstart', () => {
+        transitioned = true;
+      }, { once: true });
+
+      return { box, out, startFrame, getTransitioned: () => transitioned };
+    }
+
+    // Đổi sang state `to` và chấm điểm OK/FAIL ở frame kế tiếp.
+    function flip(ctx) {
+      const waited = frameClock - ctx.startFrame;
+      ctx.box.classList.remove('from');
+      ctx.box.classList.add('to');
+      requestAnimationFrame(() => {
+        const verdict = ctx.getTransitioned()
+          ? '<span class="verdict ok">OK — có transition</span>'
+          : '<span class="verdict fail">FAIL — bị gộp paint</span>';
+        ctx.out.innerHTML = 'frames waited: <b>' + waited + '</b><br>' + verdict;
+      });
+    }
+
+    function runLane(mode) {
+      if (mode === 'none') {
+        // Tạo box ở task, flip đồng bộ NGAY trong cùng task → không qua paint nào.
+        const ctx = setupLane('none');
+        flip(ctx);
+      } else if (mode === 'single') {
+        // Tạo box ở task (sẽ được paint ở frame boundary), flip sau 1× rAF.
+        const ctx = setupLane('single');
+        requestAnimationFrame(() => flip(ctx));
+      } else if (mode === 'double') {
+        // Tạo box ở task, flip sau 2× rAF → chắc chắn qua một frame đã paint.
+        const ctx = setupLane('double');
+        requestAnimationFrame(() => requestAnimationFrame(() => flip(ctx)));
+      }
+    }
+
+    document.getElementById('runAll').addEventListener('click', () => {
+      runLane('none');
+      runLane('single');
+      runLane('double');
+    });
+
+    document.querySelectorAll('button[data-mode]').forEach((btn) => {
+      btn.addEventListener('click', () => runLane(btn.dataset.mode));
+    });
+
+    // ---- Nhận diện trình duyệt & engine ----
+    // Thứ tự kiểm tra quan trọng: Edge/Opera/Brave đều chứa "Chrome" trong UA,
+    // nên phải lọc chúng trước khi kết luận là Chrome.
+    function detectEnv() {
+      const ua = navigator.userAgent;
+      let browser = 'Không rõ';
+      let engine = 'Không rõ';
+
+      if (/Firefox\//.test(ua) && !/Seamonkey\//.test(ua)) {
+        browser = 'Firefox ' + (ua.match(/Firefox\/(\d+)/) || [])[1];
+        engine = 'Gecko';
+      } else if (/Edg\//.test(ua)) {
+        browser = 'Edge ' + (ua.match(/Edg\/(\d+)/) || [])[1];
+        engine = 'Blink (Chromium)';
+      } else if (/OPR\//.test(ua)) {
+        browser = 'Opera ' + (ua.match(/OPR\/(\d+)/) || [])[1];
+        engine = 'Blink (Chromium)';
+      } else if (/Chrome\//.test(ua) && !/Chromium\//.test(ua)) {
+        browser = 'Chrome ' + (ua.match(/Chrome\/(\d+)/) || [])[1];
+        engine = 'Blink (Chromium)';
+      } else if (/Chromium\//.test(ua)) {
+        browser = 'Chromium ' + (ua.match(/Chromium\/(\d+)/) || [])[1];
+        engine = 'Blink (Chromium)';
+      } else if (/Safari\//.test(ua) && /Version\//.test(ua)) {
+        browser = 'Safari ' + (ua.match(/Version\/([\d.]+)/) || [])[1];
+        engine = 'WebKit';
+      }
+
+      document.getElementById('env-browser').textContent = browser;
+      document.getElementById('env-engine').innerHTML =
+        '<span class="engine-tag">' + engine + '</span>';
+    }
+    detectEnv();
+
+    // Đo tần số quét màn hình (đếm số frame trong ~500ms) để hiển thị Hz.
+    (function measureRefresh() {
+      const out = document.getElementById('env-refresh');
+      let frames = 0;
+      const start = performance.now();
+      function sample(now) {
+        frames++;
+        if (now - start >= 500) {
+          const hz = Math.round(frames / ((now - start) / 1000));
+          out.textContent = '~' + hz + ' Hz';
+        } else {
+          requestAnimationFrame(sample);
+        }
+      }
+      requestAnimationFrame(sample);
+    })();
+  </script>
+</body>
+
+</html>
