@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>forceReflow demo</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #181b22;
+      --stroke: #2a2f3a;
+      --text: #e6e8ec;
+      --muted: #8b93a1;
+      --accent: #599ce7;
+      --good: #38b27f;
+      --bad: #e0556f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 32px 24px 64px;
+    }
+
+    h1 {
+      font-size: 22px;
+      margin: 0 0 4px;
+    }
+
+    p.sub {
+      color: var(--muted);
+      margin: 0 0 24px;
+      font-size: 14px;
+      max-width: 760px;
+      line-height: 1.5;
+    }
+
+    .envbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .env-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      background: var(--panel);
+      border: 1px solid var(--stroke);
+      border-radius: 8px;
+      padding: 8px 14px;
+      min-width: 120px;
+    }
+
+    .env-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--muted);
+    }
+
+    .env-val {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .env-val .engine-tag {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 28px;
+    }
+
+    button {
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      background: var(--panel);
+      border: 1px solid var(--stroke);
+      border-radius: 8px;
+      padding: 10px 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+    }
+
+    button.primary {
+      background: var(--accent);
+      color: #0f1115;
+      border-color: var(--accent);
+    }
+
+    .lanes {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 680px) {
+      .lanes {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .lane {
+      background: var(--panel);
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .lane h2 {
+      font-size: 14px;
+      margin: 0 0 2px;
+    }
+
+    .lane .desc {
+      font-size: 12px;
+      color: var(--muted);
+      margin: 0 0 14px;
+      min-height: 48px;
+    }
+
+    .stage {
+      height: 120px;
+      border: 1px dashed var(--stroke);
+      border-radius: 8px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .box {
+      width: 64px;
+      height: 64px;
+      border-radius: 12px;
+      background: var(--accent);
+      transition: opacity .6s ease, transform .6s ease;
+    }
+
+    .box.from {
+      opacity: 0;
+      transform: translateY(28px) scale(.85);
+    }
+
+    .box.to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    .readout {
+      margin-top: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .readout b {
+      color: var(--text);
+    }
+
+    .verdict {
+      font-weight: 700;
+    }
+
+    .verdict.ok {
+      color: var(--good);
+    }
+
+    .verdict.fail {
+      color: var(--bad);
+    }
+
+    code {
+      background: #11141a;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .hint {
+      margin-top: 32px;
+      font-size: 13px;
+      color: var(--muted);
+      max-width: 760px;
+      line-height: 1.6;
+    }
+
+    .snippet {
+      margin-top: 24px;
+      background: #11141a;
+      border: 1px solid var(--stroke);
+      border-radius: 10px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: var(--text);
+      white-space: pre;
+    }
+
+    .snippet .cmt {
+      color: var(--muted);
+    }
+
+    .snippet .hl {
+      color: var(--good);
+      font-weight: 700;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>forceReflow — kích hoạt transition mà KHÔNG cần rAF</h1>
+  <p class="sub">
+    Đây là cách react-transition-group làm. Cả hai ô dưới đây đều đổi từ trạng thái A sang B
+    <b>đồng bộ trong cùng một task</b> — không dùng <code>requestAnimationFrame</code>, không
+    <code>setTimeout</code>. Khác biệt duy nhất: ô bên phải đọc <code>scrollTop</code> ở giữa, ép
+    trình duyệt vẽ lại ngay lập tức.
+  </p>
+
+  <div class="envbar">
+    <div class="env-item"><span class="env-label">Trình duyệt</span><span class="env-val" id="env-browser">—</span>
+    </div>
+    <div class="env-item"><span class="env-label">Engine</span><span class="env-val" id="env-engine">—</span></div>
+  </div>
+
+  <div class="controls">
+    <button class="primary" id="runAll">▶ Chạy cả 2 cùng lúc</button>
+    <button data-mode="plain">Chỉ: Không forceReflow</button>
+    <button data-mode="reflow">Chỉ: Có forceReflow</button>
+  </div>
+
+  <div class="lanes">
+    <div class="lane">
+      <h2>❌ Không forceReflow</h2>
+      <p class="desc">Set class <code>.from</code> rồi set <code>.to</code> ngay lập tức. Trình duyệt gộp 2 trạng thái
+        thành 1 paint → mất transition.</p>
+      <div class="stage" id="stage-plain"></div>
+      <div class="readout" id="out-plain">—</div>
+    </div>
+
+    <div class="lane">
+      <h2>✅ Có forceReflow</h2>
+      <p class="desc">Set <code>.from</code>, đọc <code>node.scrollTop</code> (ép reflow đồng bộ), rồi mới set
+        <code>.to</code>. Trạng thái A được chốt trước → transition chạy.</p>
+      <div class="stage" id="stage-reflow"></div>
+      <div class="readout" id="out-reflow">—</div>
+    </div>
+  </div>
+
+  <div class="snippet">
+    <span class="cmt">// Box vừa được tạo ở trạng thái .from (opacity 0)</span>
+    <span class="cmt">// Cả hai đều chạy đồng bộ, KHÔNG có rAF / setTimeout</span>
+
+    <span class="cmt">// ❌ Không forceReflow — bị gộp paint</span>
+    box.classList.remove('from');
+    box.classList.add('to'); <span class="cmt">// đổi luôn → trình duyệt gộp lại</span>
+
+    <span class="cmt">// ✅ Có forceReflow — transition chạy</span>
+    void box.<span class="hl">scrollTop</span>; <span class="cmt">// đọc layout = ép reflow, chốt .from TRƯỚC</span>
+    box.classList.remove('from');
+    box.classList.add('to'); <span class="cmt">// giờ .from → .to là 2 paint khác nhau</span>
+  </div>
+
+  <p class="hint">
+    Vì sao chỉ đọc một thuộc tính lại "cứu" được transition? Khi bạn đọc <code>scrollTop</code> (hay
+    <code>offsetHeight</code>, <code>getComputedStyle</code>...), trình duyệt buộc phải tính toán style
+    + layout <b>ngay tại đó</b> để trả về giá trị đúng — gọi là <b>forced synchronous layout</b>. Nhờ
+    vậy trạng thái <code>.from</code> được "chốt" lại như một mốc riêng, nên khi bạn đổi sang
+    <code>.to</code>, trình duyệt thấy đây là hai trạng thái khác nhau và chạy transition.
+    Khác với 1× rAF, cách này hoạt động đúng trên <b>mọi engine</b> — kể cả Firefox — vì nó không phụ
+    thuộc vào thời điểm rAF fire.
+  </p>
+
+  <script>
+    function runLane(mode) {
+      const stage = document.getElementById('stage-' + mode);
+      const out = document.getElementById('out-' + mode);
+      stage.innerHTML = '';
+      const box = document.createElement('div');
+      box.className = 'box from';
+      stage.appendChild(box);
+
+      const reflowed = (mode === 'reflow');
+      const label = 'forceReflow: <b>' + (reflowed ? 'có' : 'không') + '</b><br>';
+      let fired = false;
+
+      // Chính event transitionstart quyết định OK — chắc chắn transition đã chạy.
+      box.addEventListener('transitionstart', () => {
+        fired = true;
+        out.innerHTML = label + '<span class="verdict ok">OK — có transition</span>';
+      }, { once: true });
+
+      // QUAN TRỌNG: phải chốt trạng thái .from TRƯỚC khi đổi sang .to.
+      if (reflowed) {
+        // Đọc layout property => ép trình duyệt flush style + layout ngay,
+        // chốt trạng thái .from lại. Đây chính là forceReflow của
+        // react-transition-group (node.scrollTop).
+        void box.scrollTop;
+      }
+
+      // Đổi từ .from sang .to — hoàn toàn ĐỒNG BỘ, không rAF, không setTimeout.
+      box.classList.remove('from');
+      box.classList.add('to');
+
+      // Fallback: nếu sau 150ms vẫn chưa có transitionstart => bị gộp paint.
+      if (!fired) {
+        out.innerHTML = label + '<span class="verdict fail">FAIL — bị gộp paint</span>';
+      }
+    }
+
+    document.getElementById('runAll').addEventListener('click', () => {
+      runLane('plain');
+      runLane('reflow');
+    });
+    document.querySelectorAll('button[data-mode]').forEach((btn) => {
+      btn.addEventListener('click', () => runLane(btn.dataset.mode));
+    });
+
+    // ---- Nhận diện trình duyệt & engine (giống index.html) ----
+    (function detectEnv() {
+      const ua = navigator.userAgent;
+      let browser = 'Không rõ';
+      let engine = 'Không rõ';
+
+      if (/Firefox\//.test(ua) && !/Seamonkey\//.test(ua)) {
+        browser = 'Firefox ' + (ua.match(/Firefox\/(\d+)/) || [])[1];
+        engine = 'Gecko';
+      } else if (/Edg\//.test(ua)) {
+        browser = 'Edge ' + (ua.match(/Edg\/(\d+)/) || [])[1];
+        engine = 'Blink (Chromium)';
+      } else if (/OPR\//.test(ua)) {
+        browser = 'Opera ' + (ua.match(/OPR\/(\d+)/) || [])[1];
+        engine = 'Blink (Chromium)';
+      } else if (/Chrome\//.test(ua) && !/Chromium\//.test(ua)) {
+        browser = 'Chrome ' + (ua.match(/Chrome\/(\d+)/) || [])[1];
+        engine = 'Blink (Chromium)';
+      } else if (/Chromium\//.test(ua)) {
+        browser = 'Chromium ' + (ua.match(/Chromium\/(\d+)/) || [])[1];
+        engine = 'Blink (Chromium)';
+      } else if (/Safari\//.test(ua) && /Version\//.test(ua)) {
+        browser = 'Safari ' + (ua.match(/Version\/([\d.]+)/) || [])[1];
+        engine = 'WebKit';
+      }
+
+      document.getElementById('env-browser').textContent = browser;
+      document.getElementById('env-engine').innerHTML =
+        '<span class="engine-tag">' + engine + '</span>';
+    })();
+  </script>
+</body>
+
+</html>
